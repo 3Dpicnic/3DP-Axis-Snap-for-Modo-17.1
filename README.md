@@ -22,6 +22,17 @@ switches the viewport back to perspective and continues orbiting immediately.
 
 The feature enables itself at startup.
 
+## Install on Windows
+
+1. Quit Modo.
+2. Press **Windows + R**, enter `%APPDATA%\Luxology\Kits`, and press Enter.
+   Create the `Kits` folder if it does not already exist.
+3. Copy the entire `3DP_AxisSnap` folder into the `Kits` folder.
+4. Start Modo.
+
+`%APPDATA%` normally expands to
+`C:\Users\<username>\AppData\Roaming`. The feature enables itself at startup.
+
 ## Session controls
 
 Enter any of these in Modo's Command History:
