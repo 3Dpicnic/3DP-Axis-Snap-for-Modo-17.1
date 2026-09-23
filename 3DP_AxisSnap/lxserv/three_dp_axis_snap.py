@@ -20,13 +20,64 @@ try:
 except Exception:
     HEADLESS = False
 
+platform_svc = lx.service.Platform()
+MODO_MAJOR_VERSION = platform_svc.AppVersionMajor()
+
 if not HEADLESS:
-    from PySide6 import QtCore, QtWidgets
+    if MODO_MAJOR_VERSION < 15:
+        from PySide import QtCore, QtGui
+
+        # Qt 4 keeps widgets in QtGui; use one name throughout the kit.
+        QtWidgets = QtGui
+        QT_BINDING = "PySide"
+    elif MODO_MAJOR_VERSION < 17:
+        from PySide2 import QtCore, QtGui, QtWidgets
+
+        QT_BINDING = "PySide2"
+    else:
+        from PySide6 import QtCore, QtGui, QtWidgets
+
+        QT_BINDING = "PySide6"
+
     _EventFilterBase = QtCore.QObject
 else:
     QtCore = None
+    QtGui = None
     QtWidgets = None
+    QT_BINDING = None
     _EventFilterBase = object
+
+
+def _qt_enum_value(owner, group_name, member_name):
+    """Return an enum value from either Qt 4/5 or Qt 6 enum layouts."""
+    group = getattr(owner, group_name, owner)
+    return getattr(group, member_name)
+
+
+if not HEADLESS:
+    _QT_LEFT_BUTTON = _qt_enum_value(QtCore.Qt, "MouseButton", "LeftButton")
+    _QT_ALT_MODIFIER = _qt_enum_value(
+        QtCore.Qt, "KeyboardModifier", "AltModifier"
+    )
+    _QT_SHIFT_MODIFIER = _qt_enum_value(
+        QtCore.Qt, "KeyboardModifier", "ShiftModifier"
+    )
+    _QT_CONTROL_MODIFIER = _qt_enum_value(
+        QtCore.Qt, "KeyboardModifier", "ControlModifier"
+    )
+    _QT_META_MODIFIER = _qt_enum_value(
+        QtCore.Qt, "KeyboardModifier", "MetaModifier"
+    )
+    _QT_KEY_ALT = _qt_enum_value(QtCore.Qt, "Key", "Key_Alt")
+    _QT_MOUSE_BUTTON_PRESS = _qt_enum_value(
+        QtCore.QEvent, "Type", "MouseButtonPress"
+    )
+    _QT_MOUSE_BUTTON_RELEASE = _qt_enum_value(
+        QtCore.QEvent, "Type", "MouseButtonRelease"
+    )
+    _QT_MOUSE_MOVE = _qt_enum_value(QtCore.QEvent, "Type", "MouseMove")
+    _QT_KEY_PRESS = _qt_enum_value(QtCore.QEvent, "Type", "KeyPress")
+    _QT_KEY_RELEASE = _qt_enum_value(QtCore.QEvent, "Type", "KeyRelease")
 
 
 KIT_NAME = "3DP Axis Snap"
@@ -181,17 +232,15 @@ class AxisSnapEventFilter(_EventFilterBase):
         self._snapped = False
 
     def _is_orbit_press(self, event):
-        if event.button() != QtCore.Qt.MouseButton.LeftButton:
+        if event.button() != _QT_LEFT_BUTTON:
             return False
 
         modifiers = event.modifiers()
-        if not (modifiers & QtCore.Qt.KeyboardModifier.AltModifier):
+        if not (modifiers & _QT_ALT_MODIFIER):
             return False
 
         incompatible = (
-            QtCore.Qt.KeyboardModifier.ShiftModifier
-            | QtCore.Qt.KeyboardModifier.ControlModifier
-            | QtCore.Qt.KeyboardModifier.MetaModifier
+            _QT_SHIFT_MODIFIER | _QT_CONTROL_MODIFIER | _QT_META_MODIFIER
         )
         return not bool(modifiers & incompatible)
 
@@ -199,7 +248,7 @@ class AxisSnapEventFilter(_EventFilterBase):
         event_type = event.type()
 
         try:
-            if event_type == QtCore.QEvent.Type.MouseButtonPress:
+            if event_type == _QT_MOUSE_BUTTON_PRESS:
                 if not self._is_orbit_press(event):
                     return False
 
@@ -224,27 +273,27 @@ class AxisSnapEventFilter(_EventFilterBase):
                 # hauling action begins unchanged.
                 return False
 
-            if event_type == QtCore.QEvent.Type.KeyRelease:
+            if event_type == _QT_KEY_RELEASE:
                 if (
                     self._orbiting
-                    and event.key() == QtCore.Qt.Key.Key_Alt
+                    and event.key() == _QT_KEY_ALT
                     and QtWidgets.QApplication.mouseButtons()
-                    & QtCore.Qt.MouseButton.LeftButton
+                    & _QT_LEFT_BUTTON
                 ):
                     self._alt_released = True
                 return False
 
-            if event_type == QtCore.QEvent.Type.KeyPress:
+            if event_type == _QT_KEY_PRESS:
                 if (
                     self._orbiting
                     and not self._started_orthographic
                     and self._alt_released
                     and self._moved
                     and not self._snapped
-                    and event.key() == QtCore.Qt.Key.Key_Alt
+                    and event.key() == _QT_KEY_ALT
                     and not event.isAutoRepeat()
                     and QtWidgets.QApplication.mouseButtons()
-                    & QtCore.Qt.MouseButton.LeftButton
+                    & _QT_LEFT_BUTTON
                 ):
                     view = _view_under_mouse()
                     if view is not None:
@@ -256,8 +305,8 @@ class AxisSnapEventFilter(_EventFilterBase):
             if not self._orbiting:
                 return False
 
-            if event_type == QtCore.QEvent.Type.MouseMove:
-                if not (event.buttons() & QtCore.Qt.MouseButton.LeftButton):
+            if event_type == _QT_MOUSE_MOVE:
+                if not (event.buttons() & _QT_LEFT_BUTTON):
                     self._reset()
                     return False
 
@@ -271,8 +320,8 @@ class AxisSnapEventFilter(_EventFilterBase):
                 # the drag. Otherwise Modo keeps handling its normal orbit.
                 return self._snapped
 
-            if event_type == QtCore.QEvent.Type.MouseButtonRelease:
-                if event.button() == QtCore.Qt.MouseButton.LeftButton:
+            if event_type == _QT_MOUSE_BUTTON_RELEASE:
+                if event.button() == _QT_LEFT_BUTTON:
                     self._reset()
                     return False
 
@@ -296,7 +345,10 @@ def install_filter():
 
     _filter = AxisSnapEventFilter(application)
     application.installEventFilter(_filter)
-    _log("enabled (Option/Alt re-press during left-mouse orbit)")
+    _log(
+        "enabled (Modo %s, %s; Option/Alt re-press during left-mouse orbit)"
+        % (MODO_MAJOR_VERSION, QT_BINDING)
+    )
     return True
 
 
