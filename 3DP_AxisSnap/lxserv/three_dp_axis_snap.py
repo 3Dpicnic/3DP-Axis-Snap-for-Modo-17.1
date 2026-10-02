@@ -150,7 +150,132 @@ def _view_axes(view):
         return right, up, backward
 
 
-def _view_under_mouse():
+def _top_level_window(widget):
+    """Return the top-level Qt window containing *widget*."""
+    if widget is None:
+        return None
+
+    try:
+        window = widget.window()
+        if window is not None and window.isWindow():
+            return window
+    except (AttributeError, RuntimeError):
+        pass
+
+    # Some Modo/Qt combinations do not expose QWidget.window() consistently
+    # for native viewport children. Walk the widget hierarchy as a fallback.
+    try:
+        window = widget
+        while window.parentWidget() is not None:
+            window = window.parentWidget()
+        if window.isWindow():
+            return window
+    except (AttributeError, RuntimeError):
+        pass
+    return None
+
+
+def _same_window(first, second):
+    """Compare Qt windows, including bindings that create new wrappers."""
+    if first is None or second is None:
+        return False
+    if first is second:
+        return True
+    try:
+        return int(first.winId()) == int(second.winId())
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return False
+
+
+def _cursor_global_position():
+    point = QtGui.QCursor.pos()
+    return float(point.x()), float(point.y())
+
+
+def _window_at_global_position(position):
+    """Return the top-level Qt window at a global screen position."""
+    x, y = int(position[0]), int(position[1])
+
+    # widgetAt accounts for overlapping floating windows and their stacking
+    # order, so prefer it to scanning window rectangles.
+    try:
+        widget = QtWidgets.QApplication.widgetAt(x, y)
+    except TypeError:
+        widget = QtWidgets.QApplication.widgetAt(QtCore.QPoint(x, y))
+    except (AttributeError, RuntimeError):
+        widget = None
+
+    window = _top_level_window(widget)
+    if window is not None:
+        return window
+
+    # Native viewport widgets can occasionally be absent from widgetAt().
+    # Fall back to the top-level-widget approach used by Modo scripts.
+    try:
+        windows = QtWidgets.QApplication.topLevelWidgets()
+    except (AttributeError, RuntimeError):
+        return None
+
+    for candidate in reversed(windows):
+        try:
+            if (
+                candidate.isWindow()
+                and candidate.isVisible()
+                and candidate.frameGeometry().contains(x, y)
+            ):
+                return candidate
+        except (AttributeError, RuntimeError, TypeError):
+            continue
+    return None
+
+
+def _pointer_is_in_window(window, position=None):
+    if window is None:
+        return False
+    if position is None:
+        position = _cursor_global_position()
+    return _same_window(_window_at_global_position(position), window)
+
+
+def _window_for_mouse_event(watched, event):
+    """Resolve the one top-level window that owns a mouse event."""
+    position = _event_global_position(event)
+    pointer_window = _window_at_global_position(position)
+    watched_window = _top_level_window(watched)
+    if pointer_window is None:
+        return None
+    if watched_window is not None and not _same_window(
+        pointer_window, watched_window
+    ):
+        return None
+    return pointer_window
+
+
+def _activate_window(window):
+    """Make the pointer's window current before issuing viewport commands."""
+    if window is None:
+        return False
+    try:
+        application = QtWidgets.QApplication.instance()
+        if application is not None:
+            application.setActiveWindow(window)
+        else:
+            window.activateWindow()
+        return True
+    except (AttributeError, RuntimeError):
+        try:
+            window.activateWindow()
+            return True
+        except (AttributeError, RuntimeError):
+            return False
+
+
+def _view_under_mouse(target_window=None, position=None):
+    if target_window is not None and not _pointer_is_in_window(
+        target_window, position
+    ):
+        return None
+
     service = lx.service.View3Dport()
     index, x, y = service.Mouse()
     if index < 0 or x < 0 or y < 0:
@@ -200,10 +325,20 @@ def _is_orthographic(view):
     )
 
 
-def _apply_projection(projection):
-    # Make the viewport beneath the pointer current before changing its view.
+def _apply_projection(projection, target_window):
+    # The global filter can see a press before Qt activates the clicked
+    # floating window. Lock the command context to the window at the pointer
+    # so another Modo view window cannot be changed accidentally.
+    if not _pointer_is_in_window(target_window):
+        return False
+    if not _activate_window(target_window):
+        return False
+
     lx.eval("viewport.goto")
+    if not _pointer_is_in_window(target_window):
+        return False
     lx.eval("view3d.projection %s" % projection)
+    return True
 
 
 def _event_global_position(event):
@@ -223,6 +358,7 @@ class AxisSnapEventFilter(_EventFilterBase):
         self._moved = False
         self._snapped = False
         self._start = (0.0, 0.0)
+        self._target_window = None
 
     def _reset(self):
         self._orbiting = False
@@ -230,6 +366,7 @@ class AxisSnapEventFilter(_EventFilterBase):
         self._alt_released = False
         self._moved = False
         self._snapped = False
+        self._target_window = None
 
     def _is_orbit_press(self, event):
         if event.button() != _QT_LEFT_BUTTON:
@@ -252,12 +389,18 @@ class AxisSnapEventFilter(_EventFilterBase):
                 if not self._is_orbit_press(event):
                     return False
 
-                view = _view_under_mouse()
+                position = _event_global_position(event)
+                target_window = _window_for_mouse_event(watched, event)
+                if target_window is None:
+                    return False
+
+                view = _view_under_mouse(target_window, position)
                 if view is None:
                     return False
 
-                self._start = _event_global_position(event)
+                self._start = position
                 self._orbiting = True
+                self._target_window = target_window
                 self._started_orthographic = _is_orthographic(view)
                 self._alt_released = False
                 self._moved = False
@@ -267,7 +410,7 @@ class AxisSnapEventFilter(_EventFilterBase):
                     # Switch before Modo receives the press. It can then begin
                     # its normal perspective-orbit haul with this same drag,
                     # rather than having to wait for a second gesture.
-                    _apply_projection("psp")
+                    _apply_projection("psp", self._target_window)
 
                 # Modo must receive the original press so its normal orbit
                 # hauling action begins unchanged.
@@ -280,7 +423,10 @@ class AxisSnapEventFilter(_EventFilterBase):
                     and QtWidgets.QApplication.mouseButtons()
                     & _QT_LEFT_BUTTON
                 ):
-                    self._alt_released = True
+                    if _pointer_is_in_window(self._target_window):
+                        self._alt_released = True
+                    else:
+                        self._reset()
                 return False
 
             if event_type == _QT_KEY_PRESS:
@@ -295,11 +441,17 @@ class AxisSnapEventFilter(_EventFilterBase):
                     and QtWidgets.QApplication.mouseButtons()
                     & _QT_LEFT_BUTTON
                 ):
-                    view = _view_under_mouse()
+                    if not _pointer_is_in_window(self._target_window):
+                        self._reset()
+                        return False
+
+                    view = _view_under_mouse(self._target_window)
                     if view is not None:
-                        _apply_projection(_nearest_projection(view))
-                        self._snapped = True
-                        return True
+                        if _apply_projection(
+                            _nearest_projection(view), self._target_window
+                        ):
+                            self._snapped = True
+                            return True
                 return False
 
             if not self._orbiting:
@@ -311,6 +463,12 @@ class AxisSnapEventFilter(_EventFilterBase):
                     return False
 
                 current_x, current_y = _event_global_position(event)
+                if not _pointer_is_in_window(
+                    self._target_window, (current_x, current_y)
+                ):
+                    self._reset()
+                    return False
+
                 delta_x = current_x - self._start[0]
                 delta_y = current_y - self._start[1]
                 if math.hypot(delta_x, delta_y) >= ORBIT_THRESHOLD:
