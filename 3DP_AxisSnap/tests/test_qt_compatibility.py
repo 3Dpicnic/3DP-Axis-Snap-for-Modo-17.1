@@ -10,6 +10,17 @@ SOURCE = pathlib.Path(__file__).parents[1] / "lxserv" / "three_dp_axis_snap.py"
 
 
 def _old_qt_core():
+    class QPoint:
+        def __init__(self, x, y):
+            self._x = x
+            self._y = y
+
+        def x(self):
+            return self._x
+
+        def y(self):
+            return self._y
+
     class Qt:
         LeftButton = 1
         AltModifier = 2
@@ -26,17 +37,31 @@ def _old_qt_core():
         KeyRelease = 44
 
     class QObject:
-        pass
+        def __init__(self, _parent=None):
+            pass
 
     class QTimer:
         @staticmethod
         def singleShot(_delay, _callback):
             pass
 
-    return types.SimpleNamespace(Qt=Qt, QEvent=QEvent, QObject=QObject, QTimer=QTimer)
+    return types.SimpleNamespace(
+        Qt=Qt, QEvent=QEvent, QObject=QObject, QTimer=QTimer, QPoint=QPoint
+    )
 
 
 def _qt6_core():
+    class QPoint:
+        def __init__(self, x, y):
+            self._x = x
+            self._y = y
+
+        def x(self):
+            return self._x
+
+        def y(self):
+            return self._y
+
     class Qt:
         class MouseButton:
             LeftButton = 1
@@ -59,14 +84,17 @@ def _qt6_core():
             KeyRelease = 44
 
     class QObject:
-        pass
+        def __init__(self, _parent=None):
+            pass
 
     class QTimer:
         @staticmethod
         def singleShot(_delay, _callback):
             pass
 
-    return types.SimpleNamespace(Qt=Qt, QEvent=QEvent, QObject=QObject, QTimer=QTimer)
+    return types.SimpleNamespace(
+        Qt=Qt, QEvent=QEvent, QObject=QObject, QTimer=QTimer, QPoint=QPoint
+    )
 
 
 def _load_for_modo(major):
@@ -78,9 +106,31 @@ def _load_for_modo(major):
         sys.modules[name] = module
 
     qt_core = _qt6_core() if major >= 17 else _old_qt_core()
-    qt_gui = types.SimpleNamespace()
+    class CursorPoint:
+        def __init__(self, x=0, y=0):
+            self._x = x
+            self._y = y
+
+        def x(self):
+            return self._x
+
+        def y(self):
+            return self._y
+
+    class QCursor:
+        position = CursorPoint()
+
+        @staticmethod
+        def pos():
+            return QCursor.position
+
+    qt_gui = types.SimpleNamespace(QCursor=QCursor)
 
     class QApplication:
+        widget_at = None
+        top_level_widgets = []
+        active_window = None
+
         @staticmethod
         def instance():
             return None
@@ -89,7 +139,19 @@ def _load_for_modo(major):
         def mouseButtons():
             return 0
 
-    qt_widgets = types.SimpleNamespace(QApplication=QApplication)
+        @staticmethod
+        def widgetAt(*_position):
+            return QApplication.widget_at
+
+        @staticmethod
+        def topLevelWidgets():
+            return list(QApplication.top_level_widgets)
+
+        @staticmethod
+        def setActiveWindow(window):
+            QApplication.active_window = window
+
+    qt_widgets = types.SimpleNamespace(QApplication=QApplication, QCursor=QCursor)
     package_name = "PySide" if major < 15 else "PySide2" if major < 17 else "PySide6"
     package = types.ModuleType(package_name)
     package.QtCore = qt_core
@@ -151,3 +213,87 @@ def test_modo_17_uses_pyside6_and_scoped_enums():
     assert module.QT_BINDING == "PySide6"
     assert module._QT_META_MODIFIER == 16
     assert module._QT_KEY_PRESS == 43
+
+
+class _Rectangle:
+    def __init__(self, left, top, width, height):
+        self.left = left
+        self.top = top
+        self.right = left + width
+        self.bottom = top + height
+
+    def contains(self, x, y):
+        return self.left <= x < self.right and self.top <= y < self.bottom
+
+
+class _Window:
+    def __init__(self, identifier, rectangle):
+        self.identifier = identifier
+        self.rectangle = rectangle
+        self.activated = False
+
+    def window(self):
+        return self
+
+    def isWindow(self):
+        return True
+
+    def isVisible(self):
+        return True
+
+    def frameGeometry(self):
+        return self.rectangle
+
+    def winId(self):
+        return self.identifier
+
+    def activateWindow(self):
+        self.activated = True
+
+
+class _ChildWidget:
+    def __init__(self, window):
+        self._window = window
+
+    def window(self):
+        return self._window
+
+
+def test_window_under_pointer_uses_the_widget_top_level_window():
+    module = _load_for_modo(17)
+    first = _Window(1, _Rectangle(0, 0, 100, 100))
+    second = _Window(2, _Rectangle(100, 0, 100, 100))
+    module.QtWidgets.QApplication.top_level_widgets = [first, second]
+    module.QtWidgets.QApplication.widget_at = _ChildWidget(second)
+
+    assert module._window_at_global_position((150, 50)) is second
+
+
+def test_window_under_pointer_falls_back_to_top_level_widgets():
+    module = _load_for_modo(16)
+    first = _Window(1, _Rectangle(0, 0, 100, 100))
+    second = _Window(2, _Rectangle(100, 0, 100, 100))
+    module.QtWidgets.QApplication.widget_at = None
+    module.QtWidgets.QApplication.top_level_widgets = [first, second]
+
+    assert module._window_at_global_position((50, 50)) is first
+    assert module._window_at_global_position((150, 50)) is second
+
+
+def test_projection_commands_only_run_for_the_window_under_the_pointer():
+    module = _load_for_modo(17)
+    first = _Window(1, _Rectangle(0, 0, 100, 100))
+    second = _Window(2, _Rectangle(100, 0, 100, 100))
+    application = module.QtWidgets.QApplication
+    application.widget_at = _ChildWidget(second)
+    application.top_level_widgets = [first, second]
+    module.QtGui.QCursor.position = module.QtCore.QPoint(150, 50)
+
+    commands = []
+    module.lx.eval = commands.append
+
+    assert module._apply_projection("top", first) is False
+    assert commands == []
+
+    assert module._apply_projection("top", second) is True
+    assert commands == ["viewport.goto", "view3d.projection top"]
