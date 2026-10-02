@@ -13,6 +13,10 @@ After snapping, release the left mouse button before starting another orbit.
 From an orthographic view, beginning an **Option/Alt + left-mouse drag**
 switches the viewport back to perspective and continues orbiting immediately.
 
+When more than one Modo view window is open, the gesture is locked to the
+top-level window under the mouse pointer. Other view windows are left
+unchanged.
+
 ## Install on macOS
 
 1. Quit Modo.
@@ -51,7 +55,7 @@ restart Modo.
 
 ## Compatibility
 
-Version 1.2.0 selects the Qt binding bundled with the running Modo version:
+Version 1.2.1 selects the Qt binding bundled with the running Modo version:
 
 - Modo 14 and earlier: PySide
 - Modo 15 and 16: PySide2
