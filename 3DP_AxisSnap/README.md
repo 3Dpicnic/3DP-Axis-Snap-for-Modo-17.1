@@ -5,18 +5,20 @@ Blender-style orthographic view snapping during viewport orbiting for Modo.
 ## Gesture
 
 1. Start Modo's normal **Option + left-mouse drag** to orbit the viewport.
-2. Keep the left mouse button held, release Option, then press it again.
+2. Keep the left mouse button held, release Option, then press Option again.
 3. The current orientation snaps to the nearest Front, Back, Top, Bottom,
    Left, or Right orthographic view.
 
 After snapping, release the left mouse button before starting another orbit.
-From an orthographic view, beginning an **Option + left-mouse drag**
-switches
+From an orthographic view, beginning an **Option + left-mouse drag** switches
 the viewport back to perspective and continues orbiting.
 
 When more than one Modo view window is open, the gesture is locked to the
 top-level window under the mouse pointer. Other view windows are left
 unchanged.
+
+Version 1.2.2 corrects the Left/Right side mapping: orbiting from the right
+side of an object now snaps to the right-side view, and likewise for the left.
 
 ## Install on macOS
 
@@ -56,7 +58,7 @@ restart Modo.
 
 ## Compatibility
 
-Version 1.2.1 selects the Qt binding bundled with the running Modo version:
+Version 1.2.2 selects the Qt binding bundled with the running Modo version:
 
 - Modo 14 and earlier: PySide
 - Modo 15 and 16: PySide2
