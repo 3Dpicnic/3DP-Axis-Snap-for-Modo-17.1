@@ -219,6 +219,8 @@ def test_modo_side_tokens_keep_viewer_on_the_same_side():
     module = _load_for_modo(17)
     assert module._projection_for_axis((1.0, 0.0, 0.0)) == "lft"
     assert module._projection_for_axis((-1.0, 0.0, 0.0)) == "rgt"
+    assert module._projection_for_axis((0.0, 1.0, 0.0)) == "bot"
+    assert module._projection_for_axis((0.0, -1.0, 0.0)) == "top"
 
 class _Rectangle:
     def __init__(self, left, top, width, height):
