@@ -298,7 +298,10 @@ def _projection_for_axis(axis):
     if component == 0:
         return "lft" if positive else "rgt"
     if component == 1:
-        return "top" if positive else "bot"
+        # Modo names fixed-view tokens for their viewing direction, opposite
+        # to the side where the viewer is located. A camera above the object
+        # (+Y) looks downward and therefore needs Modo's "bot" token.
+        return "bot" if positive else "top"
     return "fnt" if positive else "bck"
 
 
