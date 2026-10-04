@@ -215,6 +215,11 @@ def test_modo_17_uses_pyside6_and_scoped_enums():
     assert module._QT_KEY_PRESS == 43
 
 
+def test_modo_side_tokens_keep_viewer_on_the_same_side():
+    module = _load_for_modo(17)
+    assert module._projection_for_axis((1.0, 0.0, 0.0)) == "lft"
+    assert module._projection_for_axis((-1.0, 0.0, 0.0)) == "rgt"
+
 class _Rectangle:
     def __init__(self, left, top, width, height):
         self.left = left
