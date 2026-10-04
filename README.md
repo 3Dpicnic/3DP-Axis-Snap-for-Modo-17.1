@@ -17,8 +17,9 @@ When more than one Modo view window is open, the gesture is locked to the
 top-level window under the mouse pointer. Other view windows are left
 unchanged.
 
-Version 1.2.2 corrects the Left/Right side mapping: orbiting from the right
-side of an object now snaps to the right-side view, and likewise for the left.
+Version 1.2.3 also corrects the Top/Bottom mapping: orbiting above an object
+now snaps to the top view, and orbiting below it snaps to the bottom view.
+It keeps the Left/Right correction introduced in version 1.2.2.
 
 ## Install on macOS
 
@@ -58,7 +59,7 @@ restart Modo.
 
 ## Compatibility
 
-Version 1.2.2 selects the Qt binding bundled with the running Modo version:
+Version 1.2.3 selects the Qt binding bundled with the running Modo version:
 
 - Modo 14 and earlier: PySide
 - Modo 15 and 16: PySide2
