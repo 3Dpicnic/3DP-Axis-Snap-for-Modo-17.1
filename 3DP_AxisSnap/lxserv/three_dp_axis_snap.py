@@ -296,7 +296,7 @@ def _projection_for_axis(axis):
     component = max(range(3), key=lambda index: abs(axis[index]))
     positive = axis[component] >= 0.0
     if component == 0:
-        return "rgt" if positive else "lft"
+        return "lft" if positive else "rgt"
     if component == 1:
         return "top" if positive else "bot"
     return "fnt" if positive else "bck"
