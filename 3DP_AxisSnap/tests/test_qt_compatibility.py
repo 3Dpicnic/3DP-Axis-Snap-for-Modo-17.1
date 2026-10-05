@@ -215,12 +215,68 @@ def test_modo_17_uses_pyside6_and_scoped_enums():
     assert module._QT_KEY_PRESS == 43
 
 
-def test_modo_side_tokens_keep_viewer_on_the_same_side():
+def test_modo_side_tokens_match_measured_screen_bases():
     module = _load_for_modo(17)
-    assert module._projection_for_axis((1.0, 0.0, 0.0)) == "lft"
-    assert module._projection_for_axis((-1.0, 0.0, 0.0)) == "rgt"
-    assert module._projection_for_axis((0.0, 1.0, 0.0)) == "bot"
-    assert module._projection_for_axis((0.0, -1.0, 0.0)) == "top"
+    assert module._nearest_axis_view(
+        ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    ) == ("fnt", "zero")
+    assert module._nearest_axis_view(
+        ((0, 0, -1), (0, 1, 0), (1, 0, 0))
+    ) == ("rgt", "zero")
+
+
+class _MatrixView:
+    def __init__(self, matrix):
+        self.matrix = matrix
+
+    def Matrix(self, inverse):
+        assert inverse == 1
+        return self.matrix
+
+
+def test_nearest_projection_reads_camera_back_from_matrix_column():
+    module = _load_for_modo(17)
+
+    # These view-to-world matrices look almost straight down/up with a 45
+    # degree heading. Their third rows are horizontal, while their third
+    # columns correctly contain the camera-back vectors +Y and -Y.
+    top_side_view = _MatrixView(
+        (
+            (0.70710678, -0.70710678, 0.0),
+            (0.0, 0.0, 1.0),
+            (-0.70710678, -0.70710678, 0.0),
+        )
+    )
+    bottom_side_view = _MatrixView(
+        (
+            (0.70710678, 0.70710678, 0.0),
+            (0.0, 0.0, -1.0),
+            (-0.70710678, 0.70710678, 0.0),
+        )
+    )
+
+    assert module._nearest_projection(top_side_view) == "top"
+    assert module._nearest_projection(bottom_side_view) == "bot"
+
+
+def test_screen_sampling_includes_spin_that_matrix_omits():
+    module = _load_for_modo(17)
+
+    class ScreenView(_MatrixView):
+        def Bounds(self):
+            return 4, 4, 640, 480
+
+        def To3D(self, x, y, flags):
+            assert flags == 0
+            # Top ninety: screen-right=-Z, screen-up=-X. Panned center.
+            return (3.0 + y * 0.1, 2.0, 4.0 - x * 0.1)
+
+    # Its matrix deliberately reports Top zero, just as Modo does.
+    view = ScreenView(((1, 0, 0), (0, 0, 1), (0, -1, 0)))
+    assert module._nearest_axis_view(module._view_axes(view)) == (
+        "top", "ninety"
+    )
+
 
 class _Rectangle:
     def __init__(self, left, top, width, height):
@@ -304,3 +360,41 @@ def test_projection_commands_only_run_for_the_window_under_the_pointer():
 
     assert module._apply_projection("top", second) is True
     assert commands == ["viewport.goto", "view3d.projection top"]
+
+    commands[:] = []
+    assert module._apply_projection(
+        "top", second, orientation="twoseventy"
+    ) is True
+    assert commands == [
+        "viewport.goto",
+        "view3d.projection top",
+        "view3d.orientation twoseventy",
+    ]
+
+    commands[:] = []
+    assert module._apply_projection("fnt", second, "zero") is True
+    assert commands[-1] == "view3d.orientation zero"
+
+
+def test_return_to_perspective_preserves_visible_spin_and_window_guard():
+    for major in (14, 16, 17):
+        module = _load_for_modo(major)
+        axes = ((0, 0, -1), (-1, 0, 0), (0, 1, 0))
+        changes = []
+        window = object()
+        view = types.SimpleNamespace(SetMatrix=lambda basis: changes.append(basis))
+        module._view_axes = lambda candidate: axes
+
+        def apply(projection, target):
+            assert projection == "psp" and target is window
+            changes.append(projection)
+            return True
+
+        module._apply_projection = apply
+        assert module._start_perspective_orbit(view, window) is True
+        assert changes == ["psp", axes]
+
+        changes[:] = []
+        module._apply_projection = lambda projection, target: False
+        assert module._start_perspective_orbit(view, window) is False
+        assert changes == []

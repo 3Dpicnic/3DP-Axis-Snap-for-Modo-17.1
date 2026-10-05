@@ -1,0 +1,338 @@
+[
+  {
+    "projection": "fnt",
+    "orientation": "zero",
+    "right": [
+      1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "projection": "fnt",
+    "orientation": "ninety",
+    "right": [
+      0,
+      1,
+      0
+    ],
+    "up": [
+      -1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "fnt",
+    "orientation": "oneeighty",
+    "right": [
+      -1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      -1,
+      0
+    ]
+  },
+  {
+    "projection": "fnt",
+    "orientation": "twoseventy",
+    "right": [
+      0,
+      -1,
+      0
+    ],
+    "up": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "bck",
+    "orientation": "zero",
+    "right": [
+      -1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "projection": "bck",
+    "orientation": "ninety",
+    "right": [
+      0,
+      1,
+      0
+    ],
+    "up": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "bck",
+    "orientation": "oneeighty",
+    "right": [
+      1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      -1,
+      0
+    ]
+  },
+  {
+    "projection": "bck",
+    "orientation": "twoseventy",
+    "right": [
+      0,
+      -1,
+      0
+    ],
+    "up": [
+      -1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "lft",
+    "orientation": "zero",
+    "right": [
+      0,
+      0,
+      1
+    ],
+    "up": [
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "projection": "lft",
+    "orientation": "ninety",
+    "right": [
+      0,
+      1,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      -1
+    ]
+  },
+  {
+    "projection": "lft",
+    "orientation": "oneeighty",
+    "right": [
+      0,
+      0,
+      -1
+    ],
+    "up": [
+      0,
+      -1,
+      0
+    ]
+  },
+  {
+    "projection": "lft",
+    "orientation": "twoseventy",
+    "right": [
+      0,
+      -1,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "projection": "rgt",
+    "orientation": "zero",
+    "right": [
+      0,
+      0,
+      -1
+    ],
+    "up": [
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "projection": "rgt",
+    "orientation": "ninety",
+    "right": [
+      0,
+      1,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "projection": "rgt",
+    "orientation": "oneeighty",
+    "right": [
+      0,
+      0,
+      1
+    ],
+    "up": [
+      0,
+      -1,
+      0
+    ]
+  },
+  {
+    "projection": "rgt",
+    "orientation": "twoseventy",
+    "right": [
+      0,
+      -1,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      -1
+    ]
+  },
+  {
+    "projection": "top",
+    "orientation": "zero",
+    "right": [
+      1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      -1
+    ]
+  },
+  {
+    "projection": "top",
+    "orientation": "ninety",
+    "right": [
+      0,
+      0,
+      -1
+    ],
+    "up": [
+      -1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "top",
+    "orientation": "oneeighty",
+    "right": [
+      -1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "projection": "top",
+    "orientation": "twoseventy",
+    "right": [
+      0,
+      0,
+      1
+    ],
+    "up": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "bot",
+    "orientation": "zero",
+    "right": [
+      -1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      -1
+    ]
+  },
+  {
+    "projection": "bot",
+    "orientation": "ninety",
+    "right": [
+      0,
+      0,
+      -1
+    ],
+    "up": [
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "projection": "bot",
+    "orientation": "oneeighty",
+    "right": [
+      1,
+      0,
+      0
+    ],
+    "up": [
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "projection": "bot",
+    "orientation": "twoseventy",
+    "right": [
+      0,
+      0,
+      1
+    ],
+    "up": [
+      -1,
+      0,
+      0
+    ]
+  }
+]
