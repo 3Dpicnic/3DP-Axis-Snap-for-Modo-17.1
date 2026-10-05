@@ -1,5 +1,5 @@
 # python
-"""Blender-style axis-view snapping during Modo viewport orbiting.
+"""Blender- and Zbrush-style axis-view snapping during Modo viewport orbiting.
 
 Start Modo's normal Option/Alt + left-mouse orbit, then release and press
 Option/Alt again while keeping the mouse button held.  The current view snaps
