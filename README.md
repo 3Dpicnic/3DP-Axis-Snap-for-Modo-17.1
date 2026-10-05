@@ -1,6 +1,6 @@
 # 3DP Axis Snap for Modo
 
-Blender-style orthographic view snapping during viewport orbiting for Foundry
+Blender- and Zbrush-style orthographic view snapping during viewport orbiting for Foundry
 Modo. A Python kit designed for multiple Modo versions on macOS and Windows,
 not exclusively Modo 17.1 or macOS. The kit automatically selects the Qt
 binding provided by Modo; tested configurations are listed under Compatibility.
