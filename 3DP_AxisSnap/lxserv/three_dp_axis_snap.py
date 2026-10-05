@@ -106,6 +106,10 @@ def _cross(a, b):
     )
 
 
+def _dot(a, b):
+    return sum(first * second for first, second in zip(a, b))
+
+
 def _decode_space(value):
     space = lxu.decodeID4(value)
     if isinstance(space, bytes):
@@ -129,25 +133,34 @@ def _matrix_rows(matrix):
 def _view_axes(view):
     """Return screen-right, screen-up, and camera-back vectors in world space."""
     try:
-        # inverse=1 returns the view-to-world transform.  Modo matrices use
-        # row-vector convention, so its rows are the local X/Y/Z axes.
-        rows = _matrix_rows(view.Matrix(1))
-        return (
-            _normalize(rows[0]),
-            _normalize(rows[1]),
-            _normalize(rows[2]),
-        )
+        # Flags=0 projects onto the view plane without work-plane mapping or
+        # grid snapping. Unlike Matrix(), To3D() includes fixed-view spin.
+        _x, _y, width, height = view.Bounds()
+        x, y = width * 0.5, height * 0.5
+        origin = view.To3D(x, y, 0)
+        along_right = view.To3D(x + 16.0, y, 0)
+        along_up = view.To3D(x, y - 16.0, 0)
+        right = _normalize(tuple(b - a for a, b in zip(origin, along_right)))
+        up = tuple(b - a for a, b in zip(origin, along_up))
+        # Remove numerical drift before comparing complete rotations.
+        parallel = _dot(right, up)
+        up = _normalize(tuple(u - parallel * r for u, r in zip(up, right)))
+        return right, up, _normalize(_cross(right, up))
     except Exception:
-        # Conservative fallback for builds where Matrix() is unavailable.
-        _distance, _position, direction = view.EyeVector()
-        forward = _normalize(direction)
-        backward = tuple(-value for value in forward)
-        reference_up = (0.0, 1.0, 0.0)
-        if abs(sum(a * b for a, b in zip(forward, reference_up))) > 0.95:
-            reference_up = (0.0, 0.0, -1.0)
-        right = _normalize(_cross(forward, reference_up))
-        up = _normalize(_cross(right, forward))
-        return right, up, backward
+        # Perspective Matrix(1) stores the view-to-world axes in columns.
+        # Keep this fallback for older builds that lack To3D(). Do not use
+        # EyeVector(): it gazes toward the world origin rather than the view
+        # center when the viewport has been panned.
+        rows = _matrix_rows(view.Matrix(1))
+        columns = [
+            tuple(rows[row][column] for row in range(3))
+            for column in range(3)
+        ]
+        return (
+            _normalize(columns[0]),
+            _normalize(columns[1]),
+            _normalize(columns[2]),
+        )
 
 
 def _top_level_window(widget):
@@ -291,24 +304,47 @@ def _view_under_mouse(target_window=None, position=None):
     return view
 
 
-def _projection_for_axis(axis):
-    """Map a camera-position direction to Modo's projection token."""
-    component = max(range(3), key=lambda index: abs(axis[index]))
-    positive = axis[component] >= 0.0
-    if component == 0:
-        return "lft" if positive else "rgt"
-    if component == 1:
-        # Modo names fixed-view tokens for their viewing direction, opposite
-        # to the side where the viewer is located. A camera above the object
-        # (+Y) looks downward and therefore needs Modo's "bot" token.
-        return "bot" if positive else "top"
-    return "fnt" if positive else "bck"
+# These are actual screen-right/up vectors measured with To3D() in Modo.
+# The outward axis is right cross up. Enumerating all four spins for each
+# face gives the 24 proper axis-aligned rotations (no reflected views).
+_ZERO_VIEW_AXES = (
+    ("fnt", (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    ("bck", (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    ("lft", (0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),
+    ("rgt", (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
+    ("top", (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+    ("bot", (-1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+)
+
+
+def _axis_view_candidates():
+    for projection, right, up in _ZERO_VIEW_AXES:
+        back = _cross(right, up)
+        for orientation in ("zero", "ninety", "oneeighty", "twoseventy"):
+            yield projection, orientation, (right, up, back)
+            right, up = up, tuple(-value for value in right)
+
+
+def _nearest_axis_view(axes):
+    """Choose the least angular change among all 24 orthographic rotations.
+
+    Maximizing the trace of the relative rotation is equivalent to minimizing
+    quaternion rotation distance. Matching right, up AND back keeps heading
+    and bank consistent, including near poles and when crossing over them.
+    """
+    best = max(
+        _axis_view_candidates(),
+        key=lambda candidate: sum(
+            _dot(current, target)
+            for current, target in zip(axes, candidate[2])
+        ),
+    )
+    return best[0], best[1]
 
 
 def _nearest_projection(view):
     """Return the orthographic projection nearest the current view angle."""
-    _right, _up, camera_back = _view_axes(view)
-    return _projection_for_axis(camera_back)
+    return _nearest_axis_view(_view_axes(view))[0]
 
 
 def _is_orthographic(view):
@@ -328,7 +364,7 @@ def _is_orthographic(view):
     )
 
 
-def _apply_projection(projection, target_window):
+def _apply_projection(projection, target_window, orientation=None):
     # The global filter can see a press before Qt activates the clicked
     # floating window. Lock the command context to the window at the pointer
     # so another Modo view window cannot be changed accidentally.
@@ -341,6 +377,23 @@ def _apply_projection(projection, target_window):
     if not _pointer_is_in_window(target_window):
         return False
     lx.eval("view3d.projection %s" % projection)
+
+    if orientation is not None:
+        if not _pointer_is_in_window(target_window):
+            return False
+        # Always set the spin, including zero on Front/Back/Left/Right.
+        # Otherwise a previous orthographic spin leaks into the new snap.
+        lx.eval("view3d.orientation %s" % orientation)
+    return True
+
+
+def _start_perspective_orbit(view, target_window):
+    # Modo's projection command alone drops fixed-view spin. Carry the full
+    # visible basis into perspective before forwarding the initial press.
+    axes = _view_axes(view)
+    if not _apply_projection("psp", target_window):
+        return False
+    view.SetMatrix(axes)
     return True
 
 
@@ -413,7 +466,7 @@ class AxisSnapEventFilter(_EventFilterBase):
                     # Switch before Modo receives the press. It can then begin
                     # its normal perspective-orbit haul with this same drag,
                     # rather than having to wait for a second gesture.
-                    _apply_projection("psp", self._target_window)
+                    _start_perspective_orbit(view, self._target_window)
 
                 # Modo must receive the original press so its normal orbit
                 # hauling action begins unchanged.
@@ -450,8 +503,13 @@ class AxisSnapEventFilter(_EventFilterBase):
 
                     view = _view_under_mouse(self._target_window)
                     if view is not None:
+                        projection, orientation = _nearest_axis_view(
+                            _view_axes(view)
+                        )
                         if _apply_projection(
-                            _nearest_projection(view), self._target_window
+                            projection,
+                            self._target_window,
+                            orientation,
                         ):
                             self._snapped = True
                             return True
